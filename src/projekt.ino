@@ -3,6 +3,7 @@
 #include <Adafruit_ILI9341.h>
 #include <SPI.h>
 #include <WiFi.h>
+#include <WebServer.h>
 
 // Definicje pinów dla wyświetlacza
 #define TFT_CS   5
@@ -36,8 +37,27 @@ bool occupiedMessageDisplayed = false; // flaga dla komunikatu "zajęte pole"
 
 const char* ssid = "ESP32 WLAN";
 const char* password = "12345678";
+WebServer server(80);
+
+void handleRoot() {
+  String html = "<!DOCTYPE html><html><head><title>Tic Tac Toe</title></head><body>";
+  html += "<h1>Gra TikTacToe</h1><table border='1' style='width:200px;height:200px;text-align:center;'>";
+
+  for (int row = 0; row < GRID_SIZE; row++) {
+    html += "<tr>";
+    for (int col = 0; col < GRID_SIZE; col++) {
+      char mark = (board[row][col] == 1) ? 'X' : (board[row][col] == 2) ? 'O' : ' ';
+      html += "<td style='width:60px;height:60px;'>" + String(mark) + "</td>";
+    }
+    html += "</tr>";
+  }
+
+  html += "</table></body></html>";
+  server.send(200, "text/html", html);
+}
 
 void setup() {
+  // Inicjalizacji Wi-Fi
   Serial.begin(115200);
   WiFi.begin(ssid, password);
   
@@ -49,6 +69,11 @@ void setup() {
   Serial.println("Połączono z siecią Wi-Fi.");
   Serial.println(WiFi.localIP());
 
+  // Start serwera
+  server.on("/", handleRoot);
+  server.begin();
+
+  // Inicjalizacja TFT
   tft.begin();
   tft.fillScreen(ILI9341_BLACK);
 
@@ -64,6 +89,8 @@ void setup() {
 }
 
 void loop() {
+  server.handleClient(); // Obsługa klientów HTTP
+
   // Sprawdzenie stanu każdego przycisku
   for (int row = 0; row < GRID_SIZE; row++) {
     for (int col = 0; col < GRID_SIZE; col++) {
