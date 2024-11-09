@@ -2,6 +2,7 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_ILI9341.h>
 #include <SPI.h>
+#include <WiFi.h>
 
 // Definicje pinów dla wyświetlacza
 #define TFT_CS   5
@@ -33,7 +34,21 @@ unsigned long lastDebounceTime[3][3] = {0}; // czas ostatniego naciśnięcia dla
 
 bool occupiedMessageDisplayed = false; // flaga dla komunikatu "zajęte pole"
 
+const char* ssid = "ESP32 WLAN";
+const char* password = "12345678";
+
 void setup() {
+  Serial.begin(115200);
+  WiFi.begin(ssid, password);
+  
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(1000);
+    Serial.println("Łączenie...");
+  }
+  
+  Serial.println("Połączono z siecią Wi-Fi.");
+  Serial.println(WiFi.localIP());
+
   tft.begin();
   tft.fillScreen(ILI9341_BLACK);
 
