@@ -3,7 +3,7 @@
 #include <Adafruit_ILI9341.h>
 #include <SPI.h>
 #include <WiFi.h>
-#include <WebServer.h>
+#include <WebServer.h> // Dodaj bibliotekę WebServer
 
 // Definicje pinów dla wyświetlacza
 #define TFT_CS   5
@@ -37,41 +37,38 @@ bool occupiedMessageDisplayed = false; // flaga dla komunikatu "zajęte pole"
 
 const char* ssid = "ESP32 WLAN";
 const char* password = "12345678";
+
+// Utworzenie obiektu serwera na porcie 80
 WebServer server(80);
 
+// Funkcja obsługująca stronę główną
 void handleRoot() {
-  String html = "<!DOCTYPE html><html><head><title>Tic Tac Toe</title></head><body>";
-  html += "<h1>Gra TikTacToe</h1><table border='1' style='width:200px;height:200px;text-align:center;'>";
-
-  for (int row = 0; row < GRID_SIZE; row++) {
-    html += "<tr>";
-    for (int col = 0; col < GRID_SIZE; col++) {
-      char mark = (board[row][col] == 1) ? 'X' : (board[row][col] == 2) ? 'O' : ' ';
-      html += "<td style='width:60px;height:60px;'>" + String(mark) + "</td>";
-    }
-    html += "</tr>";
-  }
-
-  html += "</table></body></html>";
+  String html = "<!DOCTYPE html><html><head><title>Tic Tac Toe Server</title></head><body>";
+  html += "<h1>Witaj na serwerze ESP32!</h1>";
+  html += "<p>Plansza gry Tic Tac Toe dostępna lokalnie.</p>";
+  html += "</body></html>";
   server.send(200, "text/html", html);
 }
 
 void setup() {
-  // Inicjalizacji Wi-Fi
+  // Inicjalizacja monitora szeregowego
   Serial.begin(115200);
-  WiFi.begin(ssid, password);
-  
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(1000);
-    Serial.println("Łączenie...");
-  }
-  
-  Serial.println("Połączono z siecią Wi-Fi.");
-  Serial.println(WiFi.localIP());
 
-  // Start serwera
-  server.on("/", handleRoot);
-  server.begin();
+  // Ustawienie trybu Access Point
+  WiFi.mode(WIFI_AP); // Włącz tryb Access Point
+  WiFi.softAP(ssid, password); // Tworzenie Access Pointa
+
+  // Wyświetlanie informacji o Access Poincie
+  Serial.println("Access Point utworzony.");
+  Serial.print("Nazwa (SSID): ");
+  Serial.println(ssid);
+  Serial.print("IP Address: ");
+  Serial.println(WiFi.softAPIP());
+
+  // Konfiguracja serwera HTTP
+  server.on("/", handleRoot); // Przypisanie obsługi żądania dla "/"
+  server.begin(); // Uruchomienie serwera
+  Serial.println("Serwer HTTP uruchomiony.");
 
   // Inicjalizacja TFT
   tft.begin();
@@ -89,7 +86,7 @@ void setup() {
 }
 
 void loop() {
-  server.handleClient(); // Obsługa klientów HTTP
+  server.handleClient(); // Obsługa przychodzących żądań do serwera
 
   // Sprawdzenie stanu każdego przycisku
   for (int row = 0; row < GRID_SIZE; row++) {
@@ -225,6 +222,7 @@ void showOccupiedMessage() {
     tft.setTextColor(ILI9341_RED);
     tft.setTextSize(2);
     tft.print("Zajete pole!");
+    tft.print(WiFi.softAPIP());
     occupiedMessageDisplayed = true;
   }
 }
