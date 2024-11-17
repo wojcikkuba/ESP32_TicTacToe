@@ -3,7 +3,7 @@
 #include <Adafruit_ILI9341.h>
 #include <SPI.h>
 #include <WiFi.h>
-#include <WebServer.h> // Dodaj bibliotekę WebServer
+#include <WebServer.h>
 
 // Definicje pinów dla wyświetlacza
 #define TFT_CS   5
@@ -11,10 +11,17 @@
 #define TFT_RST  17
 
 // Definicje pinów dla przycisków
-const int buttonPins[3][3] = {
+// Przy połączeniu jak na schemacie
+/*const int buttonPins[3][3] = {
   {13, 12, 14},
   {27, 26, 25},
   {33, 32, 35}
+};*/
+
+const int buttonPins[3][3] = {
+  {33, 32, 21},
+  {25, 26, 27},
+  {14, 12, 13}
 };
 
 // Utworzenie obiektu wyświetlacza
@@ -41,13 +48,41 @@ const char* password = "12345678";
 // Utworzenie obiektu serwera na porcie 80
 WebServer server(80);
 
+String winnerMessage = "";
+
+// Funkcja generująca HTML reprezentujący aktualną planszę
+String generateBoardHTML() {
+  String html = "<!DOCTYPE html><html><head><title>Tic Tac Toe Server</title>";
+  html += "<meta http-equiv='refresh' content='1'>"; // automatyczne odświeżanie co 1 sekunda
+  html += "<style>table {border-collapse: collapse;} td {width: 60px; height: 60px; text-align: center; font-size: 24px;}</style>";
+  html += "</head><body>";
+  html += "<h1>Stan gry Tic Tac Toe</h1>";
+  html += "<table border='1'>";
+
+  for (int row = 0; row < GRID_SIZE; row++) {
+    html += "<tr>";
+    for (int col = 0; col < GRID_SIZE; col++) {
+      char mark = (board[row][col] == 1) ? 'X' : (board[row][col] == 2) ? 'O' : ' ';
+      html += "<td>" + String(mark) + "</td>";
+    }
+    html += "</tr>";
+  }
+
+  html += "</table>";
+
+  if (!winnerMessage.isEmpty()) {
+    html += "<p>Wygrana: " + winnerMessage + "</p>";
+  }
+
+  html += "<p>Aktualny gracz: " + String((currentPlayer == 1) ? "Krzyzyk (X)" : "Kolko (O)") + "</p>";
+  html += "</body></html>";
+
+  return html;
+}
+
 // Funkcja obsługująca stronę główną
 void handleRoot() {
-  String html = "<!DOCTYPE html><html><head><title>Tic Tac Toe Server</title></head><body>";
-  html += "<h1>Witaj na serwerze ESP32!</h1>";
-  html += "<p>Plansza gry Tic Tac Toe dostępna lokalnie.</p>";
-  html += "</body></html>";
-  server.send(200, "text/html", html);
+  server.send(200, "text/html", generateBoardHTML());
 }
 
 void setup() {
@@ -78,8 +113,12 @@ void setup() {
   for (int row = 0; row < GRID_SIZE; row++) {
     for (int col = 0; col < GRID_SIZE; col++) {
       pinMode(buttonPins[row][col], INPUT_PULLUP);
+      board[row][col] = 0;
     }
   }
+
+  occupiedMessageDisplayed = false;
+  currentPlayer = 1;
 
   drawGrid();
   drawPlayerTurn();
@@ -116,7 +155,7 @@ void loop() {
             return;
           }
         } else {
-          showOccupiedMessage(); // Wyświetl komunikat "zajęte pole"
+           showOccupiedMessage(); // Wyświetl komunikat "zajęte pole"
         }
       }
     }
@@ -128,6 +167,11 @@ bool isButtonPressed(int pin, int row, int col) {
   if (digitalRead(pin) == LOW) {
     if (millis() - lastDebounceTime[row][col] > debounceDelay) {
       lastDebounceTime[row][col] = millis();
+      Serial.print("Przycisk w wierszu ");
+      Serial.print(row);
+      Serial.print(" kolumnie ");
+      Serial.print(col);
+      Serial.println(" został wciśnięty.");
       return true;
     }
   }
@@ -142,6 +186,7 @@ void drawGrid() {
   tft.drawLine(0, CELL_SIZE + 30, SCREEN_WIDTH, CELL_SIZE + 30, ILI9341_GREEN);
   tft.drawLine(0, CELL_SIZE * 2 + 30, SCREEN_WIDTH, CELL_SIZE * 2 + 30, ILI9341_GREEN);
 }
+
 
 // Funkcja wyświetlająca aktualny gracz
 void drawPlayerTurn() {
@@ -158,6 +203,10 @@ void drawPlayerTurn() {
 
 // Funkcja rysująca X
 void drawX(int row, int col) {
+  Serial.print("Rysowanie X na pozycji: ");
+  Serial.print(row);
+  Serial.print(", ");
+  Serial.println(col);
   int x0 = col * CELL_SIZE;
   int y0 = row * CELL_SIZE + 30;
   tft.drawLine(x0 + 10, y0 + 10, x0 + CELL_SIZE - 10, y0 + CELL_SIZE - 10, ILI9341_RED);
@@ -166,6 +215,10 @@ void drawX(int row, int col) {
 
 // Funkcja rysująca O
 void drawO(int row, int col) {
+  Serial.print("Rysowanie O na pozycji: ");
+  Serial.print(row);
+  Serial.print(", ");
+  Serial.println(col);
   int x0 = col * CELL_SIZE + CELL_SIZE / 2;
   int y0 = row * CELL_SIZE + CELL_SIZE / 2 + 30;
   tft.drawCircle(x0, y0, CELL_SIZE / 2 - 10, ILI9341_BLUE);
@@ -174,12 +227,23 @@ void drawO(int row, int col) {
 // Funkcja sprawdzająca warunek zwycięstwa
 bool checkWin() {
   for (int i = 0; i < GRID_SIZE; i++) {
-    if (board[i][0] != 0 && board[i][0] == board[i][1] && board[i][1] == board[i][2]) return true;
-    if (board[0][i] != 0 && board[0][i] == board[1][i] && board[1][i] == board[2][i]) return true;
+    if (board[i][0] != 0 && board[i][0] == board[i][1] && board[i][1] == board[i][2]) {
+      winnerMessage = "Wygrywa " + String((board[i][0] == 1) ? "Krzyżyk (X)" : "Kółko (O)") + "!";
+      return true;
+    }
+    if (board[0][i] != 0 && board[0][i] == board[1][i] && board[1][i] == board[2][i]) {
+      winnerMessage = "Wygrywa " + String((board[0][i] == 1) ? "Krzyżyk (X)" : "Kółko (O)") + "!";
+      return true;
+    }
   }
-  if (board[0][0] != 0 && board[0][0] == board[1][1] && board[1][1] == board[2][2]) return true;
-  if (board[0][2] != 0 && board[0][2] == board[1][1] && board[1][1] == board[2][0]) return true;
-
+  if (board[0][0] != 0 && board[0][0] == board[1][1] && board[1][1] == board[2][2]) {
+    winnerMessage = "Wygrywa " + String((board[0][0] == 1) ? "Krzyżyk (X)" : "Kółko (O)") + "!";
+    return true;
+  }
+  if (board[0][2] != 0 && board[0][2] == board[1][1] && board[1][1] == board[2][0]) {
+    winnerMessage = "Wygrywa " + String((board[0][2] == 1) ? "Krzyżyk (X)" : "Kółko (O)") + "!";
+    return true;
+  }
   return false;
 }
 
@@ -195,6 +259,7 @@ bool checkDraw() {
 
 // Funkcja wyświetlająca komunikat o wygranej
 void showWinMessage() {
+  delay(3000); // Dodanie 3-sekundowego opóźnienia
   tft.fillScreen(ILI9341_BLACK);
   tft.setCursor(20, 140);
   tft.setTextColor(ILI9341_WHITE);
@@ -208,6 +273,7 @@ void showWinMessage() {
 
 // Funkcja wyświetlająca komunikat o remisie
 void showDrawMessage() {
+  delay(3000); // Dodanie 3-sekundowego opóźnienia
   tft.fillScreen(ILI9341_BLACK);
   tft.setCursor(50, 140);
   tft.setTextColor(ILI9341_WHITE);
@@ -222,7 +288,6 @@ void showOccupiedMessage() {
     tft.setTextColor(ILI9341_RED);
     tft.setTextSize(2);
     tft.print("Zajete pole!");
-    tft.print(WiFi.softAPIP());
     occupiedMessageDisplayed = true;
   }
 }
@@ -237,13 +302,22 @@ void clearOccupiedMessage() {
 
 // Funkcja resetująca grę
 void resetGame() {
+  // Resetowanie tablicy reprezentującej planszę
   for (int row = 0; row < GRID_SIZE; row++) {
     for (int col = 0; col < GRID_SIZE; col++) {
-      board[row][col] = 0;
+      board[row][col] = 0;  // Ustawienie wszystkich pozycji na puste (0)
     }
   }
+
+  // Ustawienie aktualnego gracza na początkowego (Krzyżyk)
   currentPlayer = 1;
-  drawGrid();
-  drawPlayerTurn();
-  clearOccupiedMessage(); // Wyczyść komunikat przy resecie
+
+  // Wyczyszczenie komunikatu o zwycięzcy
+  winnerMessage = "";
+
+  // Wyczyszczenie i ponowne narysowanie planszy
+  tft.fillScreen(ILI9341_BLACK); // Wyczyszczenie ekranu
+  drawGrid();                    // Ponowne narysowanie kratki
+  drawPlayerTurn();              // Aktualizacja komunikatu o turze
+  occupiedMessageDisplayed = false;        // Wyczyść komunikat, jeśli jest wyświetlany
 }
