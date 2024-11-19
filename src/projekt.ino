@@ -53,21 +53,29 @@ unsigned long resetTime = 0; // Czas zaplanowanego resetu gry (0 = brak resetu)
 String generateBoardHTML() {
   String html = "<!DOCTYPE html><html><head><title>Tic Tac Toe Server</title>";
   html += "<meta charset='UTF-8'>";
-  html += "<meta http-equiv='refresh' content='1'>"; // Automatyczne odświeżanie strony co 1 sekunda
+  html += "<meta name='viewport' content='width=device-width, initial-scale=1.0'>"; // Responsywność
+  html += "<meta http-equiv='refresh' content='1'>"; // Automatyczne odświeżanie
   html += "<style>";
-  html += "body { font-family: Arial, sans-serif; text-align: center; }";
-  html += "table { border-collapse: collapse; margin: 0 auto; }";
-  html += "td { width: 60px; height: 60px; text-align: center; font-size: 24px; border: 1px solid #000; }";
-  html += "p { font-size: 20px; }";
+  html += "body { font-family: 'Roboto', sans-serif; text-align: center; background-color: #f0f8ff; margin: 0; padding: 0; }";
+  html += "h1 { color: #333; }";
+  html += "table { border-collapse: collapse; margin: 20px auto; box-shadow: 0 4px 8px rgba(0,0,0,0.2); }";
+  html += "td { width: 60px; height: 60px; text-align: center; font-size: 40px; border: 1px solid #000; background-color: #ffffff; color: #ff1744; }";
+  html += "p { font-size: 20px; color: #555; }";
+  html += "input[type='submit'] { padding: 10px 20px; font-size: 16px; background-color: #4CAF50; color: white; border: none; border-radius: 5px; cursor: pointer; margin-top: 20px; }";
   html += "</style></head><body>";
 
-  html += "<h1>Stan gry Tic Tac Toe</h1>";
+  html += "<h1>Stan gry Kółko i Krzyżyk</h1>";
   html += "<table>";
   for (int row = 0; row < GRID_SIZE; row++) {
     html += "<tr>";
     for (int col = 0; col < GRID_SIZE; col++) {
-      char mark = (board[row][col] == 1) ? 'X' : (board[row][col] == 2) ? 'O' : ' ';
-      html += "<td>" + String(mark) + "</td>";
+      if (board[row][col] == 1) {
+        html += "<td>&#x274C;</td>"; // Czerwony X
+      } else if (board[row][col] == 2) {
+        html += "<td>&#x2B55;</td>"; // Czerwone O
+      } else {
+        html += "<td></td>"; // Puste pole
+      }
     }
     html += "</tr>";
   }
@@ -78,22 +86,18 @@ String generateBoardHTML() {
   }
 
   if (gameState == WIN || gameState == DRAW) {
-    html += "<p style='color: red; font-size: 24px;'>";
-    html += winnerMessage; // Wyświetl komunikat o wyniku
-    html += "</p>";
+    html += "<p style='color: red; font-size: 24px;'>" + winnerMessage + "</p>";
   } else if (gameState == PLAYING) {
     html += "<p>Aktualny gracz: " + String((currentPlayer == 1) ? "Krzyżyk (X)" : "Kółko (O)") + "</p>";
   }
 
   html += "<form action='/reset' method='get'>";
-  html += "<input type='submit' value='Resetuj grę' style='margin-top: 20px; font-size: 16px;'>";
+  html += "<input type='submit' value='Resetuj grę'>";
   html += "</form>";
 
   html += "</body></html>";
   return html;
 }
-
-
 
 // Funkcja obsługująca stronę główną
 void handleRoot() {
