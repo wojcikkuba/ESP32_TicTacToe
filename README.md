@@ -1,4 +1,4 @@
-**ESP32 Tic Tac Toe with Live Server and TFT Display**
+<h1>ESP32 Tic Tac Toe with Live Server and TFT Display</h1>
 
 This project implements a Tic Tac Toe game on an ESP32 microcontroller. The game leverages the ESP32's Wi-Fi capabilities to host a web server that allows players to follow moves through a live webpage. The state of the board is displayed in real-time and updates automatically as players take their turns.
 
