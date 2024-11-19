@@ -34,6 +34,7 @@ const int debounceDelay = 200; // czas debounce w milisekundach
 unsigned long lastDebounceTime[3][3] = {0}; // czas ostatniego naciśnięcia dla każdego przycisku
 
 bool occupiedMessageDisplayed = false; // flaga dla komunikatu "zajęte pole"
+String occupiedMessage = "";
 
 const char* ssid = "ESP32 WLAN";
 const char* password = "12345678";
@@ -42,6 +43,11 @@ const char* password = "12345678";
 WebServer server(80);
 
 String winnerMessage = "";
+
+enum GameState { PLAYING, WIN, DRAW };
+GameState gameState = PLAYING;
+
+unsigned long resetTime = 0; // Czas zaplanowanego resetu gry (0 = brak resetu)
 
 // Funkcja generująca HTML reprezentujący aktualną planszę
 String generateBoardHTML() {
@@ -55,10 +61,7 @@ String generateBoardHTML() {
   html += "p { font-size: 20px; }";
   html += "</style></head><body>";
 
-  // Nagłówek z informacją o grze
   html += "<h1>Stan gry Tic Tac Toe</h1>";
-
-  // Tworzenie planszy gry jako tabeli HTML
   html += "<table>";
   for (int row = 0; row < GRID_SIZE; row++) {
     html += "<tr>";
@@ -70,18 +73,22 @@ String generateBoardHTML() {
   }
   html += "</table>";
 
-  // Komunikat o stanie gry
-  if (!winnerMessage.isEmpty()) {
-    Serial.println("Generowanie komunikatu o wygranej w HTML.");
-    html += "<p style='color: red; font-size: 24px;'>Wygrana: " + winnerMessage + "</p>";
-  } else {
-    Serial.println("Brak komunikatu o wygranej do wyświetlenia.");
-    html += "<p>Aktualny gracz: " + String((currentPlayer == 1) ? "Krzyzyk (X)" : "Kolko (O)") + "</p>";
+  if (!occupiedMessage.isEmpty()) {
+    html += "<p style='color: red; font-size: 18px;'>" + occupiedMessage + "</p>";
+  }
+
+  if (gameState == WIN || gameState == DRAW) {
+    html += "<p style='color: red; font-size: 24px;'>";
+    html += winnerMessage; // Wyświetl komunikat o wyniku
+    html += "</p>";
+  } else if (gameState == PLAYING) {
+    html += "<p>Aktualny gracz: " + String((currentPlayer == 1) ? "Krzyżyk (X)" : "Kółko (O)") + "</p>";
   }
 
   html += "</body></html>";
   return html;
 }
+
 
 
 // Funkcja obsługująca stronę główną
@@ -123,7 +130,14 @@ void setup() {
 }
 
 void loop() {
-  server.handleClient();
+  server.handleClient(); // Obsługa klientów serwera HTTP
+
+  // Sprawdź, czy gra wymaga resetu
+  if (resetTime > 0 && millis() > resetTime) {
+    resetGame();       // Zresetuj grę
+    resetTime = 0;     // Wyzeruj czas resetu
+    return;            // Wyjdź z pętli
+  }
 
   for (int row = 0; row < GRID_SIZE; row++) {
     for (int col = 0; col < GRID_SIZE; col++) {
@@ -131,6 +145,8 @@ void loop() {
         if (board[row][col] == 0) {
           board[row][col] = currentPlayer;
           clearOccupiedMessage();
+          occupiedMessage = "";
+
           if (currentPlayer == 1) {
             drawX(row, col);
             currentPlayer = 2;
@@ -140,31 +156,25 @@ void loop() {
           }
           drawPlayerTurn();
 
-          server.send(200, "text/html", generateBoardHTML()); // Zaktualizuj stronę po wykonaniu ruchu
-
+          // Sprawdź, czy ktoś wygrał lub remis
           if (checkWin()) {
-            showWinMessage();  // Wyświetlenie komunikatu na ekranie TFT
-            Serial.println("Ustawienie komunikatu o wygranej: " + winnerMessage);
-            server.send(200, "text/html", generateBoardHTML());  // Wyślij zaktualizowaną stronę z komunikatem o zwycięstwie
-            Serial.println("Wysłanie komunikatu o zwycięzcy na stronę.");
-            delay(3000);  // Opóźnienie przed zresetowaniem gry, aby użytkownik mógł zobaczyć komunikat
-            resetGame();  // Dopiero teraz zresetuj grę
-            return;
+            gameState = WIN;
+            showWinMessage(); // Wyświetl komunikat o wygranej
+            resetTime = millis() + 3000; // Zaplanuj reset za 3 sekundy
           } else if (checkDraw()) {
-            showWinMessage();  // Wyświetlenie komunikatu na ekranie TFT
-            server.send(200, "text/html", generateBoardHTML());  // Wyślij zaktualizowaną stronę z komunikatem o zwycięstwie
-            Serial.println("Wysłanie komunikatu o zwycięzcy na stronę.");
-            delay(3000);  // Opóźnienie przed zresetowaniem gry, aby użytkownik mógł zobaczyć komunikat
-            resetGame();  // Dopiero teraz zresetuj grę
-            return;
+            gameState = DRAW;
+            showDrawMessage(); // Wyświetl komunikat o remisie
+            resetTime = millis() + 3000; // Zaplanuj reset za 3 sekundy
           }
         } else {
-          showOccupiedMessage();
+          showOccupiedMessage(); // TFT
+          occupiedMessage = "Zajęte pole!"; // HTML
         }
       }
     }
   }
 }
+
 
 bool isButtonPressed(int pin, int row, int col) {
   if (digitalRead(pin) == LOW) {
@@ -178,10 +188,11 @@ bool isButtonPressed(int pin, int row, int col) {
 
 void drawGrid() {
   tft.fillScreen(ILI9341_BLACK);
-  tft.drawLine(CELL_SIZE, 30, CELL_SIZE, SCREEN_HEIGHT, ILI9341_GREEN);
-  tft.drawLine(CELL_SIZE * 2, 30, CELL_SIZE * 2, SCREEN_HEIGHT, ILI9341_GREEN);
-  tft.drawLine(0, CELL_SIZE + 30, SCREEN_WIDTH, CELL_SIZE + 30, ILI9341_GREEN);
-  tft.drawLine(0, CELL_SIZE * 2 + 30, SCREEN_WIDTH, CELL_SIZE * 2 + 30, ILI9341_GREEN);
+  int startY = 30;
+  tft.drawLine(CELL_SIZE, startY, CELL_SIZE, SCREEN_HEIGHT - startY, ILI9341_GREEN);
+  tft.drawLine(CELL_SIZE * 2, startY, CELL_SIZE * 2, SCREEN_HEIGHT - startY, ILI9341_GREEN);
+  tft.drawLine(0, CELL_SIZE + startY, SCREEN_WIDTH, CELL_SIZE + startY, ILI9341_GREEN);
+  tft.drawLine(0, CELL_SIZE * 2 + startY, SCREEN_WIDTH, CELL_SIZE * 2 + startY, ILI9341_GREEN);
 }
 
 void drawPlayerTurn() {
