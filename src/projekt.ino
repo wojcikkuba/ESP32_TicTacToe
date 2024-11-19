@@ -85,6 +85,10 @@ String generateBoardHTML() {
     html += "<p>Aktualny gracz: " + String((currentPlayer == 1) ? "Krzyżyk (X)" : "Kółko (O)") + "</p>";
   }
 
+  html += "<form action='/reset' method='get'>";
+  html += "<input type='submit' value='Resetuj grę' style='margin-top: 20px; font-size: 16px;'>";
+  html += "</form>";
+
   html += "</body></html>";
   return html;
 }
@@ -127,6 +131,8 @@ void setup() {
 
   drawGrid();
   drawPlayerTurn();
+
+  server.on("/reset", handleReset);
 }
 
 void loop() {
@@ -309,6 +315,8 @@ void resetGame() {
   // Ustawienie aktualnego gracza na początkowego (Krzyżyk)
   currentPlayer = 1;
 
+  gameState = PLAYING;
+
   // Wyczyszczenie komunikatu o zwycięzcy
   winnerMessage = "";
 
@@ -317,4 +325,10 @@ void resetGame() {
   drawGrid();                    // Ponowne narysowanie kratki
   drawPlayerTurn();              // Aktualizacja komunikatu o turze
   occupiedMessageDisplayed = false;        // Wyczyść komunikat, jeśli jest wyświetlany
+}
+
+// Funkcja obsługująca reset gry z poziomu serwera
+void handleReset() {
+  resetGame();
+  server.send(200, "text/html", "<!DOCTYPE html><html><head><meta http-equiv='refresh' content='0; url=/'></head><body></body></html>");
 }
